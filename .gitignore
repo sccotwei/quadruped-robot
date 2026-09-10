@@ -1,0 +1,47 @@
+# Arduino / ESP32 build outputs
+build/
+out/
+*.bin
+*.elf
+*.hex
+*.map
+*.eep
+*.lst
+*.lss
+*.sym
+*.o
+*.d
+*.a
+
+# Arduino IDE and tooling state
+.arduinoIDE/
+.arduino15/
+*.ino.*
+
+# PlatformIO outputs (reserved if the project adopts PlatformIO later)
+.pio/
+
+# Local editor state
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python helper artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local Wi-Fi configuration and secrets
+/quad-arduino-wifi/Config.h
+*.local.h
+.env
+.env.*
+!.env.example
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
