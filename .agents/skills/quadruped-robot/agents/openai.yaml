@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quadruped Robot"
+  short_description: "Guide safe ESP32 and quadruped robot development"
+  default_prompt: "Use $quadruped-robot to handle a scoped quadruped robot development task."
