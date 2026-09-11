@@ -15,6 +15,34 @@
 
 1. ESP32Servo
 2. ArduinoJson
+3. Adafruit VL53L1X（仅真实传感器模式需要，并依赖 Adafruit BusIO）
+
+## 距离传感器模式
+
+`VL53L1XDistanceSensor.h` 中的 `DISTANCE_SENSOR_SIMULATION` 控制距离来源，
+`ObstacleAvoidance.h` 中的 `OBSTACLE_AVOIDANCE_DRY_RUN` 控制避障动作是否实际执行。
+当前推荐的软件测试配置为：
+
+```cpp
+#define DISTANCE_SENSOR_SIMULATION 1
+#define OBSTACLE_AVOIDANCE_DRY_RUN 1
+```
+
+该配置不访问 VL53L1X，不允许避障状态机自动驱动机器人，只输出模拟距离、状态转换和 `[AVOID][DRYRUN]` 动作日志。Dry Run 只拦截 `ObstacleAvoidance` 产生的动作；正常舵机初始化和用户主动 Web 控制保持原样，因此实体机器人仍应架空并准备随时断电。
+
+Phase 1-A 已使用上述配置在真实 ESP32 上完成编译、上传和运行验证：模拟距离正常循环，避障状态机完整经历 `CLEAR -> OBSTACLE_DETECTED -> BACKING_UP -> TURNING -> RECOVERING -> CLEAR`，并确认 Dry Run 下没有避障模块引发的真实舵机动作。这只验证软件仿真路径，不代表真实 VL53L1X、I2C 接线或真实运动避障已经验证。
+
+真实测试必须按以下顺序推进：
+
+| 阶段 | `DISTANCE_SENSOR_SIMULATION` | `OBSTACLE_AVOIDANCE_DRY_RUN` | 目的 |
+|---|---:|---:|---|
+| A（已完成） | 1 | 1 | 已在真实 ESP32 上验证模拟数据、完整状态机和 Dry Run 执行器隔离 |
+| B | 0 | 1 | 验证真实 VL53L1X、I2C 和距离数据，仍禁止自动避障动作 |
+| C | 0 | 0 | 完成供电、接线、距离和安全措施验证后，进行最终真实避障测试 |
+
+进入阶段 B 前必须先阅读 `docs/HARDWARE.md`；其中 VCC 电压仍待万用表确认，禁止仅根据文档直接通电。真实传感器模式还需要 Adafruit VL53L1X、Adafruit BusIO、Wire 和 GPIO21 / GPIO22。
+
+尚未完成：Phase 1-B 真实 VL53L1X 测试、expansion-board VCC 电压测量、D21 / D22 物理 I2C 验证、舵机 / Brownout 供电调查，以及 Phase 1-C 真实运动避障。实测中，连接全部舵机时曾出现 Brownout detector reset；断开舵机并仅使用 USB 给 ESP32 / expansion board 供电后程序稳定运行。该现象当前仅作为供电侧待调查事项，不应关闭 Brownout 保护或据此修改舵机供电逻辑；相关电源硬件升级延期到后续独立硬件阶段。
 
 ## 首次编译前配置
 

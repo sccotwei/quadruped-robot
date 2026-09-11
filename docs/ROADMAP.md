@@ -17,21 +17,37 @@
 - 建立 Git 与工程文档结构。
 - 实机 baseline 验收步骤：TODO。
 
-## Phase 1：VL53L1X 距离检测
+## Phase 1：VL53L1X 距离检测与基础前向避障
+
+状态：PHASE 1-A SOFTWARE SIMULATION VERIFIED ON REAL ESP32 / PHASE 1-B PENDING
+
+- 已增加独立 VL53L1X 软件接口，表达初始化、有效数据、无效数据、timeout 和毫米距离。
+- 已增加默认启用的 5 Hz 模拟距离序列，以及带 `[TOF][SIM]` 标记的限频 Serial 输出。
+- 已增加 `CLEAR -> OBSTACLE_DETECTED -> BACKING_UP -> TURNING -> RECOVERING` 避障状态机、传感器故障安全状态和进入/退出迟滞。
+- 已增加默认启用的避障执行器 Dry Run；它保留完整状态计时和动作日志，但不执行避障模块请求的 `home()`、`backward()` 或 `turnR()`。
+- Phase 1-A 已在真实 ESP32 上以 `DISTANCE_SENSOR_SIMULATION=1`、`OBSTACLE_AVOIDANCE_DRY_RUN=1` 完成编译、上传和运行验证。
+- 已实测确认模拟距离稳定循环，完整经历 `CLEAR -> OBSTACLE_DETECTED -> BACKING_UP -> TURNING -> RECOVERING -> CLEAR`，且 Dry Run 下没有避障模块引发的真实舵机动作。
+- 当前初始阈值为进入 250 mm、退出 350 mm，仅用于首轮软件测试，必须根据实机传感器与制动距离校准。
+- 已复用现有 `home()`、`backward()`、`turnR()` 动作接口，未修改 Phase 0 gait、舵机参数或 GPIO。
+- 已对 Web 前进命令增加安全门控：传感器无效或避障未回到 `CLEAR` 时禁止向前。
+- Phase 1-B 真实 VL53L1X、expansion-board VCC 电压测量、GPIO21 / GPIO22 物理 I2C 验证：TODO / PHYSICAL TEST REQUIRED。
+- 舵机连接状态下观察到 Brownout detector reset，断开舵机并仅以 USB 给 ESP32 / expansion board 供电后软件稳定运行；供电侧原因仍待调查，不修改或关闭 Brownout 保护，相关电源硬件升级延期到独立硬件阶段处理。
+- Phase 1-C 真实运动避障、实际阈值、安装方向和制动距离：TODO / PHYSICAL TEST REQUIRED。
+- 当前动作接口仍为同步执行，状态等待与传感器模拟是非阻塞的，但后退/转向动作期间无法轮询传感器；保持 baseline 稳定，本阶段不重写 gait。
+
+Phase 1 推荐验证顺序：
+
+1. 阶段 A（已完成）：`DISTANCE_SENSOR_SIMULATION=1`、`OBSTACLE_AVOIDANCE_DRY_RUN=1`；已在真实 ESP32 上验证模拟数据、完整状态机和 Dry Run 执行器隔离。
+2. 阶段 B：`DISTANCE_SENSOR_SIMULATION=0`、`OBSTACLE_AVOIDANCE_DRY_RUN=1`，仅验证真实传感器，不允许自动运动。
+3. 阶段 C：`DISTANCE_SENSOR_SIMULATION=0`、`OBSTACLE_AVOIDANCE_DRY_RUN=0`，在完成硬件与安全检查后验证真实避障。
+
+## Phase 2：实机避障校准与增强
 
 状态：PLANNED
 
-- 确认模块接线、供电、GPIO、I2C 地址和安装方向。
-- 增加独立距离采集与诊断能力。
-- 不在本阶段直接改变基础行走逻辑。
-- 采样频率、滤波方案和有效距离范围：UNKNOWN。
-
-## Phase 2：基础自主避障
-
-状态：PLANNED
-
-- 基于已验证的距离数据实现基础避障。
-- 定义停车距离、转向策略、超时和传感器异常降级行为。
+- 基于实机距离与制动测试校准进入/退出阈值、后退量和转向量。
+- 评估非阻塞运动调度，使动作过程中也能持续采样和响应传感器。
+- 增加滤波、异常恢复策略与更可靠的转向策略。
 - 避障状态与现有 Web 控制的优先级：UNKNOWN。
 - 验收场景与安全边界：TODO。
 

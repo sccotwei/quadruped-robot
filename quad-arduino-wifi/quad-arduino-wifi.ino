@@ -1,6 +1,7 @@
 // 依赖库(在库管理直接搜名字安装即可):
 //   1. ESP32Servo
 //   2. ArduinoJson
+//   3. Adafruit VL53L1X (仅真实传感器模式需要，同时安装 Adafruit BusIO)
 // 
 // 舵机与 esp32 引脚接线图, 数据口方向为后 (tail)
 // 
@@ -26,6 +27,8 @@
 #include <ESP32Servo.h>
 #include <ArduinoJson.h>
 #include "minikame.h"
+#include "VL53L1XDistanceSensor.h"
+#include "ObstacleAvoidance.h"
 #include "WiFiSetup.h"
 
 const int LED = 2;
@@ -33,8 +36,13 @@ const int LED = 2;
 WebServer server(80);
 
 MiniKame robot;
+VL53L1XDistanceSensor distanceSensor;
+ObstacleAvoidanceController obstacleAvoidance(robot, distanceSensor);
 bool running = 0;
 int input = 0;
+
+constexpr uint32_t kLoopHeartbeatIntervalMs = 1000;
+uint32_t lastLoopHeartbeatMs = 0;
 
 DynamicJsonDocument jsonDoc(1024);
 
@@ -47,40 +55,74 @@ void setup(void) {
   digitalWrite(LED, 0);
 
   Serial.begin(9600);  // 启动串口通讯
+  Serial.println(F("[BOOT] setup start"));
+  Serial.print(F("[BOOT] DISTANCE_SENSOR_SIMULATION="));
+  Serial.println(DISTANCE_SENSOR_SIMULATION);
+  Serial.print(F("[BOOT] OBSTACLE_AVOIDANCE_DRY_RUN="));
+  Serial.println(OBSTACLE_AVOIDANCE_DRY_RUN);
+
+  Serial.println(F("[BOOT] before distanceSensor.begin"));
+  const bool distanceSensorReady = distanceSensor.begin();
+  Serial.print(F("[BOOT] after distanceSensor.begin ready="));
+  Serial.println(distanceSensorReady ? 1 : 0);
 
   // 初始化WiFi
+  Serial.println(F("[BOOT] before initWiFi"));
   bool wifiConnected = initWiFi();
+  Serial.print(F("[BOOT] after initWiFi connected="));
+  Serial.println(wifiConnected ? 1 : 0);
 
   // 根据WiFi连接状态设置LED
   digitalWrite(LED, wifiConnected ? 1 : 0);
 
   if (wifiConnected) {
     // 启动Web服务器
+    Serial.println(F("[BOOT] before WebServer init #1"));
     server.begin();
     server.on("/", HTTP_GET, handleRoot);
     server.on("/control", HTTP_POST, handlePost);
     server.onNotFound(handleNotFound);
+    Serial.println(F("[BOOT] after WebServer init #1"));
 
     Serial.println("HTTP服务器已启动");
   } else {
     Serial.println("WiFi配置失败, 请检查设置或重启设备");
+    Serial.println(F("[BOOT] setup exit: WiFi initialization failed"));
     delay(1000);
     return;
   }
 
+  Serial.println(F("[BOOT] before WebServer init #2"));
   server.begin();                        // 启动网站服务
   server.on("/", HTTP_GET, handleRoot);  // 设置服务器根目录即'/'的函数'handleRoot'
   server.on("/control", HTTP_POST, handlePost);
   server.onNotFound(handleNotFound);  // 设置处理404情况的函数'handleNotFound'
+  Serial.println(F("[BOOT] after WebServer init #2"));
 
   Serial.println("HTTP server started");  //  告知用户ESP32网络服务功能已经启动
   delay(10);
+  Serial.println(F("[BOOT] before robot.init"));
   robot.init();
+  Serial.println(F("[BOOT] after robot.init"));
+  Serial.println(F("[BOOT] before robot.home"));
   robot.home();
+  Serial.println(F("[BOOT] after robot.home"));
+  Serial.println(F("[BOOT] before obstacleAvoidance.begin"));
+  obstacleAvoidance.begin();
+  Serial.println(F("[BOOT] after obstacleAvoidance.begin"));
+  Serial.println(F("[BOOT] setup complete"));
 }
 
 void loop() {
+  const bool distanceUpdated = distanceSensor.update();
+  obstacleAvoidance.update(distanceUpdated);
   server.handleClient();
+
+  const uint32_t nowMs = millis();
+  if (nowMs - lastLoopHeartbeatMs >= kLoopHeartbeatIntervalMs) {
+    lastLoopHeartbeatMs = nowMs;
+    Serial.println(F("[BOOT] loop alive"));
+  }
 }
 
 
@@ -126,6 +168,12 @@ bool processCommand(const char* command) {
   String cmd = String(command);
   
   if (cmd == "forward") {
+    if (!obstacleAvoidance.canMoveForward()) {
+      Serial.print(F("[AVOID] forward blocked; state="));
+      Serial.println(obstacleAvoidance.getStateName());
+      robot.home();
+      return true;
+    }
     robot.forward(2, 1000);
     return true;
   } 
