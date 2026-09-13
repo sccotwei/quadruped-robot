@@ -7,7 +7,7 @@ Guardian Agent is GuardianPaw's high-level interpretation, risk assessment, and 
 The ESP32 is deliberately responsible for real-time behavior. A language model is useful for interpreting context and explaining a high-level recommendation, but it must never replace deterministic stopping and obstacle-avoidance logic. Guardian Agent therefore uses two layers:
 
 1. A deterministic safety policy evaluates non-negotiable constraints.
-2. A real [Strands Agents SDK](https://strandsagents.com/docs/) `Agent` uses Amazon Bedrock by default to interpret context and produce a structured high-level explanation.
+2. A real [Strands Agents SDK](https://strandsagents.com/docs/) `Agent` uses Amazon Bedrock by default, with an explicit Ollama local-provider fallback, to interpret context and produce a structured high-level explanation.
 
 The deterministic result is enforced again after model inference, so the model cannot relax risk, human escalation, patrol permission, or the required safe action.
 
@@ -40,7 +40,7 @@ Real and verified project capabilities:
 - Phase 1-A avoidance state machine running on a real ESP32
 - Dry Run isolation preventing avoidance-controller actuator calls
 
-The Guardian Agent CLI and deterministic policy run locally. The normal CLI path constructs and invokes a real Strands Agent with a registered custom tool and structured output. Successful Bedrock inference still depends on the machine's AWS credentials, region, model access, and network connectivity.
+The Guardian Agent CLI and deterministic policy run locally. The normal CLI path constructs and invokes a real Strands Agent with a registered custom tool and structured output. Amazon Bedrock remains the preferred/default provider. An explicit Ollama provider lets judges and developers run the same Strands path locally without AWS credentials. Live local Strands inference has been verified with Ollama and `llama3.1`; provider selection never bypasses the deterministic policy.
 
 ## Simulation disclosure
 
@@ -69,11 +69,61 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Strands uses Amazon Bedrock by default. Configure AWS credentials through the standard AWS credential chain and ensure the selected model is enabled. `.env.example` lists supported variable names but the program does not load that file or contain secrets. `GUARDIAN_BEDROCK_MODEL_ID` can optionally select a Bedrock model without tying the code to a personal account.
+The Ollama integration uses the official Strands optional dependency already declared in `requirements.txt`. To add it to an existing environment directly:
+
+```text
+python -m pip install 'strands-agents[ollama]>=1.55,<2'
+```
+
+## Model providers
+
+Provider selection is explicit. The application never falls back from Bedrock to Ollama automatically, so a failed cloud request cannot be mistaken for a successful local request.
+
+### Amazon Bedrock — preferred and default
+
+If `GUARDIAN_MODEL_PROVIDER` is absent, Guardian Agent creates Strands' `BedrockModel` with `global.anthropic.claude-sonnet-4-6`. `GUARDIAN_BEDROCK_MODEL_ID` can override that model without tying the code to a personal account. Configure AWS credentials through the standard credential chain and ensure the selected model is available.
+
+Windows PowerShell:
+
+```text
+$env:GUARDIAN_MODEL_PROVIDER="bedrock"
+python demo.py
+```
+
+Amazon Bedrock live inference is pending AWS account/payment activation.
+
+### Ollama — explicit local fallback
+
+Install [Ollama](https://ollama.com/download), pull a model that supports tool calling and structured output, and ensure its local server is running. The model is never hard-coded: `OLLAMA_MODEL` is required. `OLLAMA_HOST` defaults to `http://localhost:11434`.
+
+Example setup:
+
+```text
+ollama pull llama3.1
+ollama serve
+```
+
+Windows PowerShell:
+
+```text
+$env:GUARDIAN_MODEL_PROVIDER="ollama"
+$env:OLLAMA_MODEL="llama3.1"
+python demo.py
+```
+
+macOS / Linux:
+
+```text
+GUARDIAN_MODEL_PROVIDER=ollama OLLAMA_MODEL=llama3.1 python demo.py
+```
+
+The model name above matches the verified configuration. On Windows, Ollama 0.34.0 with `llama3.1:latest` completed all four GuardianPaw scenarios with exit code 0 in approximately 28.85 seconds. The run used real Strands inference, the registered `evaluate_safety_policy` tool, Pydantic structured output, and deterministic post-enforcement. It produced no validation errors or OOM, and Ollama reported NVIDIA RTX 4060 Laptop GPU use.
+
+Ollama emitted a non-fatal warning that forced `ToolChoice` is unsupported. GuardianPaw does not depend on forced provider-side tool choice for its safety boundary: `GuardianAgent.decide()` explicitly invokes the registered `evaluate_safety_policy` tool before model reasoning, then enforces the same deterministic assessment after the structured response.
 
 ## Run the demo
 
-Real Strands inference path:
+Real Strands inference path, after configuring one provider above:
 
 ```text
 python demo.py
@@ -104,14 +154,15 @@ The safety tests are fully offline and do not call Bedrock:
 python -m unittest discover -s tests -v
 ```
 
-They cover normal patrol, obstacle handling, sensor fault, disconnection, and rejection of a model response that attempts to relax a hard rule.
+They cover normal patrol, obstacle handling, sensor fault, disconnection, rejection of a model response that attempts to relax a hard rule, Bedrock defaults, Ollama configuration, custom-tool registration, and rejection of unknown providers.
 
 ## Current limitations
 
 - The telemetry timeline is simulated; physical VL53L1X and D21 / D22 I2C communication are not verified.
 - No live ESP32-to-Agent telemetry transport is implemented.
 - Battery status is `null` because GuardianPaw has no verified battery telemetry source.
-- Model inference requires valid AWS credentials and Bedrock model access.
+- Bedrock inference requires valid AWS credentials and model access; live verification is pending account/payment activation.
+- Ollama inference requires a separately installed/running Ollama service and a pulled `llama3.1` model. Live local verification succeeded, with the non-fatal forced-`ToolChoice` limitation disclosed above.
 - Power-system brownout risk remains under hardware investigation; power upgrades are deferred.
 - No MPU6050, vision, AgentCore deployment, database, web UI, or multi-agent swarm is included.
 

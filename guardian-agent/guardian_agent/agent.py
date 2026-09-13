@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Literal, Optional
+from typing import Literal, Optional, cast
 
 from pydantic import BaseModel, Field
 from strands import Agent
+from strands.models import BedrockModel
 
 from .models import AgentDecision, RobotState
 from .policies import enforce_safety_policy, evaluate_safety_policy
 from .tools import evaluate_safety_policy as evaluate_safety_policy_tool
+
+ModelProvider = Literal["bedrock", "ollama"]
+
+DEFAULT_MODEL_PROVIDER: ModelProvider = "bedrock"
+DEFAULT_BEDROCK_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
+DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
 SYSTEM_PROMPT = """
 You are Guardian Agent, GuardianPaw's high-level decision and human-escalation
@@ -36,21 +43,97 @@ class _ReasonedDecision(BaseModel):
     allow_autonomous_patrol: bool
 
 
+def _environment_value(name: str) -> Optional[str]:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    return value.strip() or None
+
+
+def resolve_model_provider(provider: Optional[str] = None) -> ModelProvider:
+    """Resolve an explicit provider without silently falling back."""
+
+    selected = (
+        provider or _environment_value("GUARDIAN_MODEL_PROVIDER") or DEFAULT_MODEL_PROVIDER
+    ).strip().lower()
+    if selected not in ("bedrock", "ollama"):
+        raise ValueError(
+            "GUARDIAN_MODEL_PROVIDER must be 'bedrock' or 'ollama'; "
+            f"got {selected!r}"
+        )
+    return cast(ModelProvider, selected)
+
+
+def _load_ollama_model_class() -> type:
+    try:
+        from strands.models.ollama import OllamaModel
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Strands Ollama support is not installed. Run: "
+            "python -m pip install 'strands-agents[ollama]>=1.55,<2'"
+        ) from exc
+    return OllamaModel
+
+
+def _create_model(
+    provider: ModelProvider, model_id: Optional[str]
+) -> tuple[object, str, Optional[str]]:
+    if provider == "bedrock":
+        selected_model = (
+            model_id
+            or _environment_value("GUARDIAN_BEDROCK_MODEL_ID")
+            or DEFAULT_BEDROCK_MODEL_ID
+        )
+        return BedrockModel(model_id=selected_model), selected_model, None
+
+    selected_model = model_id or _environment_value("OLLAMA_MODEL")
+    if selected_model is None:
+        raise ValueError(
+            "OLLAMA_MODEL is required when GUARDIAN_MODEL_PROVIDER=ollama. "
+            "Pull a tool-capable model and set OLLAMA_MODEL to its name."
+        )
+
+    ollama_host = _environment_value("OLLAMA_HOST") or DEFAULT_OLLAMA_HOST
+    ollama_model_class = _load_ollama_model_class()
+
+    return (
+        ollama_model_class(host=ollama_host, model_id=selected_model),
+        selected_model,
+        ollama_host,
+    )
+
+
 class GuardianAgent:
     """Run Strands reasoning, then re-apply deterministic safety constraints."""
 
-    def __init__(self, model_id: Optional[str] = None) -> None:
-        selected_model = model_id or os.getenv("GUARDIAN_BEDROCK_MODEL_ID") or None
+    def __init__(
+        self, model_id: Optional[str] = None, provider: Optional[str] = None
+    ) -> None:
+        self._model_provider = resolve_model_provider(provider)
+        model, self._model_id, self._ollama_host = _create_model(
+            self._model_provider, model_id
+        )
         options: dict[str, object] = {
             "name": "guardian_agent",
             "system_prompt": SYSTEM_PROMPT,
             "tools": [evaluate_safety_policy_tool],
             "callback_handler": None,
+            "model": model,
         }
-        if selected_model:
-            options["model"] = selected_model
 
         self._agent = Agent(**options)
+
+    @property
+    def model_provider(self) -> ModelProvider:
+        return self._model_provider
+
+    @property
+    def model_id(self) -> str:
+        return self._model_id
+
+    @property
+    def ollama_host(self) -> Optional[str]:
+        return self._ollama_host
 
     @property
     def tool_names(self) -> list[str]:

@@ -27,6 +27,8 @@ flowchart TD
     end
 
     subgraph MODEL[Model Provider Path]
-        AGENT -.->|Implemented; live inference pending| BEDROCK[Amazon Bedrock]
+        AGENT -.->|Preferred / default; live pending| BEDROCK[Amazon Bedrock]
         BEDROCK -.-> CLAUDE[Claude model]
+        AGENT -.->|Local fallback; live verified| OLLAMA[Ollama local provider]
+        OLLAMA -.-> LOCALMODEL[llama3.1]
     end

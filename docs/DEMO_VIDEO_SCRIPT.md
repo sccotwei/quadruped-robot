@@ -4,7 +4,7 @@
 
 **Hard limit:** 5:00
 
-**Disclosure rule:** keep `SIMULATED ToF` visible whenever distance telemetry is shown. Do not describe Bedrock as live-verified unless a real inference is successfully recorded before the final edit.
+**Disclosure rule:** keep `SIMULATED ToF` visible whenever distance telemetry is shown. Local Strands inference with Ollama is verified; Amazon Bedrock must remain labeled as pending unless a separate real Bedrock run is recorded.
 
 ## 0:00-0:20 — Problem / Hook
 
@@ -40,17 +40,17 @@
 
 ## 1:50-2:40 — Guardian Agent Demo
 
-**Visual:** Terminal running `python demo.py --policy-only`. Keep the first two disclosure lines visible, then show the four scenario decisions with risk, patrol permission, and human escalation highlighted. Briefly cut to the real Strands Agent construction in source.
+**Visual:** Terminal running the live local `python demo.py` path with `MODEL PROVIDER: OLLAMA` and `TELEMETRY SOURCE: SIMULATED` both visible. Show the four scenario decisions with risk, patrol permission, and human escalation highlighted. Briefly cut to the real Strands Agent construction and provider selection in source.
 
-**Voiceover:** “The high-level Guardian Agent consumes the same idea as a structured RobotState. This repeatable demo uses simulated telemetry and the deterministic policy-only path, so it does not claim model inference. Normal patrol is low risk. When an obstacle appears, the agent does not compete with the ESP32—it waits. During recovery, patrol remains paused until clear. With a sensor fault, risk becomes high, autonomous patrol is denied, and a human is required. The repository also contains the real Strands Agent path; live Bedrock inference verification is pending AWS account and payment activation.”
+**Voiceover:** “The high-level Guardian Agent consumes simulated telemetry as a structured RobotState, but the reasoning path here is real. A Strands Agent uses the local Ollama fallback with llama3.1, invokes the registered safety tool, validates a structured response, and reapplies deterministic constraints. Normal patrol is low risk. For an obstacle, the agent waits for the ESP32. During recovery, patrol remains paused. A sensor fault becomes high risk, denies autonomous patrol, and requires a human. Amazon Bedrock remains the preferred provider, but its live verification is still pending account activation.”
 
-**On-screen text:** `TELEMETRY SOURCE: SIMULATED` / `POLICY ONLY — NO MODEL INFERENCE` / `Bedrock live verification: pending`
+**On-screen text:** `TELEMETRY SOURCE: SIMULATED` / `LIVE STRANDS + OLLAMA / llama3.1` / `Bedrock live verification: pending`
 
 ## 2:40-3:20 — Safety Architecture / Strands Tool Flow
 
 **Visual:** Animate the Mermaid diagram from the ESP32 to `RobotState`, deterministic policy, Strands Agent, custom tool, structured decision, and human escalation. Zoom briefly into the `@tool` decorator and Pydantic output model.
 
-**Voiceover:** “Here is the key safety boundary. The ESP32 owns immediate stop, obstacle response, gait, and servos. Robot telemetry becomes a typed state. Deterministic rules first set the minimum risk, whether patrol is allowed, and whether a human is required. A real Strands Agent is configured with the custom evaluate-safety-policy tool and Pydantic structured output. After reasoning, the hard policy is enforced again. Even if a model suggests continuing, it cannot override a sensor fault or an engaged local controller.”
+**Voiceover:** “Here is the key safety boundary. The ESP32 owns immediate stop, obstacle response, gait, and servos. Robot telemetry becomes a typed state. Deterministic rules first set the minimum risk, whether patrol is allowed, and whether a human is required. A real Strands Agent uses a custom evaluate-safety-policy tool and Pydantic structured output. This complete path is verified locally with Ollama. After reasoning, the hard policy is enforced again, so the model cannot override a sensor fault or an engaged local controller.”
 
 **On-screen text:** `Policy -> Strands Agent <-> custom @tool -> structured decision` / `Deterministic post-enforcement`
 
@@ -83,5 +83,6 @@
 - Planned runtime is exactly **4:30** from the section timestamps.
 - Record the Serial monitor at its configured application baud rate; bootloader output may use a different baud rate.
 - Do not stage unverified hardware to look operational.
-- Preserve the policy-only disclosure unless the footage actually shows a successful Strands/Bedrock inference.
+- When recording the verified local model path, show both `MODEL PROVIDER: OLLAMA` and `TELEMETRY SOURCE: SIMULATED`; never label that footage as Bedrock inference.
+- If the non-fatal forced-`ToolChoice` warning appears, do not hide it. Explain that GuardianPaw explicitly invokes its registered safety tool and that the current flow completes successfully.
 - Confirm ownership or permission for every visual, logo, soundtrack, and clip before publishing.

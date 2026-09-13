@@ -1,2 +1,2 @@
-strands-agents>=1.55,<2
+strands-agents[ollama]>=1.55,<2
 pydantic>=2,<3

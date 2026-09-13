@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 from typing import Optional
@@ -87,7 +88,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model-id",
-        help="Optional Bedrock model ID; otherwise Strands uses its default.",
+        help="Optional model ID override for the explicitly selected provider.",
     )
     return parser.parse_args()
 
@@ -105,6 +106,9 @@ def run_strands(state: RobotState, model_id: Optional[str]) -> AgentDecision:
 
 def main() -> int:
     args = parse_args()
+    selected_provider = (
+        os.getenv("GUARDIAN_MODEL_PROVIDER", "bedrock").strip().lower() or "bedrock"
+    )
     print("TELEMETRY SOURCE: SIMULATED", flush=True)
     if args.policy_only:
         print(
@@ -116,6 +120,7 @@ def main() -> int:
             "DECISION PIPELINE: STRANDS AGENT + DETERMINISTIC SAFETY POLICY",
             flush=True,
         )
+        print(f"MODEL PROVIDER: {selected_provider.upper()}", flush=True)
 
     for index, scenario in enumerate(SCENARIOS, start=1):
         print(f"\n=== Scenario {index}: {scenario.name} ===")
@@ -134,11 +139,26 @@ def main() -> int:
         except Exception as exc:  # Show a real provider/credential blocker.
             print("STRANDS INFERENCE: NOT VERIFIED", file=sys.stderr)
             print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
-            print(
-                "Configure AWS/Bedrock access, or run python demo.py "
-                "--policy-only for the offline safety pipeline.",
-                file=sys.stderr,
-            )
+            if selected_provider == "bedrock":
+                print(
+                    "Amazon Bedrock is the default provider. Configure AWS/Bedrock "
+                    "access, or explicitly set GUARDIAN_MODEL_PROVIDER=ollama and "
+                    "OLLAMA_MODEL to use the local Strands provider. No automatic "
+                    "fallback was attempted.",
+                    file=sys.stderr,
+                )
+            elif selected_provider == "ollama":
+                print(
+                    "Install and start Ollama, pull a tool-capable model, and set "
+                    "OLLAMA_MODEL. The offline debug path remains available with "
+                    "python demo.py --policy-only.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "Set GUARDIAN_MODEL_PROVIDER to bedrock or ollama.",
+                    file=sys.stderr,
+                )
             return 2
 
         print("DECISION:")

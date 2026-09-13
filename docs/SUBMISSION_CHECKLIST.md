@@ -19,11 +19,13 @@ This checklist reflects repository readiness at the Submission Pack checkpoint. 
 
 ## Technical
 
-- [x] Real Strands Agent usage visible in source
-- [x] Custom `@tool` visible in source
+- [x] Real Strands Agent usage visible in source and verified with live local inference
+- [x] Custom `@tool` visible and explicit tool execution verified
 - [x] Deterministic safety-policy tests
 - [x] `demo.py --policy-only` works offline
+- [x] Live local Strands inference verified with Ollama and `llama3.1`
 - [x] Bedrock live inference limitation disclosed in every current submission surface; live inference itself remains unverified
+- [ ] Amazon Bedrock live inference verified
 
 ## Hardware
 
@@ -40,10 +42,10 @@ This checklist reflects repository readiness at the Submission Pack checkpoint. 
 ## Final Accuracy Pass
 
 - [ ] Replace the Bedrock limitation only after a real inference succeeds and its output is captured.
-- [ ] Keep `TELEMETRY SOURCE: SIMULATED` visible while the demo uses simulated ToF values.
-- [ ] Verify no AWS account ID, credential, token, Wi-Fi secret, or local absolute path is committed.
+- [x] Keep `TELEMETRY SOURCE: SIMULATED` visible while the demo uses simulated ToF values.
+- [x] Verify no AWS account ID, credential, token, Wi-Fi secret, or local absolute path is committed.
 - [ ] Verify all external media permissions and the owner confirmations in `PRIOR_WORK.md`.
-- [ ] Confirm `quad-arduino-wifi/` behavior is unchanged from the verified Phase 1-A checkpoint.
+- [x] Confirm `quad-arduino-wifi/` behavior is unchanged from the verified Phase 1-A checkpoint.
 
 ## Suggested GitHub About
 

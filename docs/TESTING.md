@@ -53,17 +53,44 @@ DECISION PIPELINE: DETERMINISTIC POLICY ONLY (NO MODEL INFERENCE)
 
 The command runs four simulated scenarios: normal patrol, obstacle detected, recovery, and sensor fault. It is a deterministic fallback/debug path, not proof of Strands model inference.
 
-## Strands / Amazon Bedrock Path
+## Real Strands Provider Paths
 
-The normal path creates and invokes the real Strands Agent:
+Both provider paths create the same real Strands Agent, register the same `evaluate_safety_policy` custom tool, request the same Pydantic structured output, and apply the same deterministic post-enforcement. Provider selection is explicit and never falls back silently.
+
+### Amazon Bedrock — preferred and default
+
+The default path requires AWS authentication, an AWS region, network access, and permission to invoke `global.anthropic.claude-sonnet-4-6` unless `GUARDIAN_BEDROCK_MODEL_ID` overrides it:
 
 ```text
 python demo.py
 ```
 
-This path requires AWS authentication, an AWS region, network access, and permission to invoke the selected Amazon Bedrock model. Configure credentials through the standard AWS credential chain; never put credentials in this repository. `GUARDIAN_BEDROCK_MODEL_ID` may select a model without hard-coding an account.
+Configure credentials through the standard AWS credential chain; never put credentials in this repository.
 
 At this submission-pack checkpoint, Bedrock integration is implemented as the default Strands provider, but live inference verification is pending AWS account/payment activation. A credentials, access, or provider error must be reported as a blocker rather than presented as successful model output.
+
+### Ollama — explicit local fallback
+
+The official Strands Ollama extra is declared in `requirements.txt`. To add it to an existing environment:
+
+```text
+python -m pip install 'strands-agents[ollama]>=1.55,<2'
+```
+
+Install [Ollama](https://ollama.com/download), pull `llama3.1`, and ensure the local service is running. Then run the verified Windows PowerShell path:
+
+```text
+ollama pull llama3.1
+$env:GUARDIAN_MODEL_PROVIDER="ollama"
+$env:OLLAMA_MODEL="llama3.1"
+python demo.py
+```
+
+`OLLAMA_HOST` defaults to `http://localhost:11434`; `OLLAMA_MODEL` has no code default and must identify a model that is actually installed. No AWS credentials are required for this explicit local fallback.
+
+This path was live-verified on Windows with Ollama 0.34.0 and `llama3.1:latest`. A real Strands Agent completed normal patrol, obstacle detected, recovery, and sensor fault with exit code 0 in approximately 28.85 seconds. The registered custom tool executed successfully, Pydantic structured output produced no validation errors, and deterministic post-enforcement preserved the required safety results.
+
+The provider emitted a non-fatal warning that forced `ToolChoice` is unsupported. GuardianPaw explicitly invokes `evaluate_safety_policy` through the registered Strands tool before inference, so its current safety-tool path does not rely on that provider capability and completed successfully.
 
 ## Hardware Evidence Boundary
 

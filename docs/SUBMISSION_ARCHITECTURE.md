@@ -1,6 +1,6 @@
 # GuardianPaw Submission Architecture
 
-GuardianPaw separates time-critical robot safety from high-level interpretation. Solid arrows show the current data and decision design. The dotted model path is implemented through Strands' default Amazon Bedrock provider, but live Bedrock inference is pending AWS account/payment activation and has not been verified.
+GuardianPaw separates time-critical robot safety from high-level interpretation. Solid arrows show the current data and decision design. Dotted arrows show explicitly selected model-provider paths: Amazon Bedrock is preferred/default and still awaits live verification, while the Ollama local fallback has completed live Strands inference with `llama3.1`. Provider failure never triggers a silent fallback.
 
 ```mermaid
 flowchart TD
@@ -32,8 +32,10 @@ flowchart TD
     end
 
     subgraph MODEL[Model Provider Path]
-        AGENT -.->|Implemented; live inference pending| BEDROCK[Amazon Bedrock]
+        AGENT -.->|Preferred / default; live pending| BEDROCK[Amazon Bedrock]
         BEDROCK -.-> CLAUDE[Claude model]
+        AGENT -.->|Local fallback; live verified| OLLAMA[Ollama local provider]
+        OLLAMA -.-> LOCALMODEL[llama3.1]
     end
 ```
 
@@ -54,5 +56,8 @@ The model can add context and explanation, but deterministic post-enforcement fi
 
 - **Verified on physical ESP32:** Phase 1-A simulated distances, complete avoidance state transitions, and Dry Run isolation of avoidance-triggered actuators.
 - **Verified offline:** deterministic policy tests and the four-scenario policy-only CLI demo.
-- **Implemented but not live-verified:** Strands-to-Bedrock inference.
+- **Verified with live local inference:** Strands Agent, OllamaModel with `llama3.1`, explicit `evaluate_safety_policy` custom-tool execution, Pydantic structured output, and deterministic post-enforcement completed all four simulated-telemetry scenarios.
+- **Implemented but not live-verified:** Strands-to-Bedrock inference; AWS account/payment activation is pending.
 - **Not verified:** physical VL53L1X ranging, D21/D22 I2C wiring, autonomous physical avoidance, MPU6050, and vision.
+
+The verified Ollama run emitted a non-fatal warning that forced `ToolChoice` is unsupported. GuardianPaw's safety flow still worked because it explicitly invokes the registered safety tool before model reasoning and deterministically enforces the assessment again after structured output.

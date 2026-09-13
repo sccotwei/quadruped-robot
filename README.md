@@ -2,7 +2,7 @@
 
 GuardianPaw is an embodied home-safety agent that combines a physical quadruped robot, deterministic edge safety, and a Strands-based high-level decision agent.
 
-> Hackathon submission snapshot: the physical ESP32 locomotion baseline and the Phase 1-A simulated-sensor safety flow are verified. Physical ToF ranging and live Amazon Bedrock inference are explicitly not yet verified.
+> Hackathon submission snapshot: the physical ESP32 locomotion baseline, Phase 1-A simulated-sensor safety flow, and live local Strands inference with Ollama are verified. Physical ToF ranging and live Amazon Bedrock inference are explicitly not yet verified.
 
 ## The Problem
 
@@ -31,9 +31,9 @@ The ESP32 retains authority over physical safety. The model may interpret and ex
 
 | Evidence class | Current scope |
 |---|---|
-| **REAL / VERIFIED** | Physical locomotion; ESP32 Wi-Fi/HTTP; Phase 1-A state machine on a real ESP32; Dry Run isolation; Strands Agent code; deterministic safety policy; custom Strands tool; four-scenario policy-only demo. |
+| **REAL / VERIFIED** | Physical locomotion; ESP32 Wi-Fi/HTTP; Phase 1-A state machine on a real ESP32; Dry Run isolation; Strands Agent code with explicit provider selection; deterministic safety policy; custom Strands tool; four-scenario policy-only demo; live local Strands inference using Ollama and llama3.1. |
 | **SIMULATED** | Current ToF distance telemetry used by Phase 1-A and the Guardian Agent CLI. |
-| **PENDING** | Real VL53L1X ranging; physical autonomous avoidance; MPU6050; vision; live Bedrock inference. |
+| **PENDING** | Real VL53L1X ranging; physical autonomous avoidance; MPU6050; vision; live Amazon Bedrock inference. |
 
 ## Simulation Disclosure
 
@@ -57,10 +57,11 @@ No output in this repository should be interpreted as proof of physical VL53L1X,
 | **REAL / VERIFIED** | Obstacle-avoidance state machine | `CLEAR -> OBSTACLE_DETECTED -> BACKING_UP -> TURNING -> RECOVERING -> CLEAR` is implemented. |
 | **REAL / VERIFIED** | Phase 1-A on real ESP32 | The simulated ToF stream and complete state cycle were observed over Serial on physical hardware. |
 | **REAL / VERIFIED** | Actuator Dry Run isolation | With Dry Run enabled, avoidance-controller actions produced logs without actuator calls. |
-| **REAL / VERIFIED** | Guardian Agent built with Strands Agents SDK | The MVP instantiates a real `strands.Agent` and uses Strands' default Bedrock model provider path. |
+| **REAL / VERIFIED** | Guardian Agent built with Strands Agents SDK | The MVP instantiates a real `strands.Agent`; Bedrock remains the default and an explicit Ollama local-provider path is available. |
 | **REAL / VERIFIED** | Deterministic safety policy | Offline rules deny patrol on invalid telemetry, sensor fault, or disconnection and retain priority after model output. |
-| **REAL / VERIFIED** | Strands custom tool registration | The read-only `evaluate_safety_policy` function is registered with Strands using `@tool`. |
+| **REAL / VERIFIED** | Strands custom tool execution | The read-only `evaluate_safety_policy` function is registered with Strands using `@tool` and its explicit Strands tool invocation completed successfully. |
 | **REAL / VERIFIED** | Four-scenario policy-only demo | Normal patrol, obstacle, recovery, and sensor-fault scenarios run without hardware or paid model access. |
+| **REAL / VERIFIED** | Live local Strands inference | Ollama 0.34.0 with `llama3.1:latest` completed all four scenarios on Windows with exit code 0 in approximately 28.85 seconds. Pydantic structured output and deterministic post-enforcement succeeded without validation errors or OOM; Ollama reported NVIDIA RTX 4060 Laptop GPU use. |
 | **NOT YET VERIFIED** | Real VL53L1X ranging | Phase 1-A uses simulated distance values; Phase 1-B hardware work is pending. |
 | **NOT YET VERIFIED** | Real MPU6050 | No MPU6050 integration is implemented. |
 | **NOT YET VERIFIED** | Vision | No vision input or vision model is implemented. |
@@ -101,13 +102,14 @@ The language model cannot override deterministic safety constraints. Safety rule
 This is not a chatbot relabeled as a robot controller. The implementation uses:
 
 - A real `strands.Agent` instance.
-- Strands' `BedrockModel` provider path, with model selection configurable through the standard environment rather than a personal account hard-coded in source.
+- Strands' `BedrockModel` as the preferred/default provider, using `global.anthropic.claude-sonnet-4-6` unless explicitly overridden.
+- Strands' official `OllamaModel` as an explicit local fallback, with host and model selected through environment variables.
 - A custom `@tool` named `evaluate_safety_policy` that returns authoritative, structured safety constraints for the current `RobotState`.
 - A Pydantic structured-output model for stable operational decisions.
 - Tool-assisted safety evaluation before high-level interpretation.
 - Deterministic post-enforcement so the model cannot relax risk level, human escalation, patrol permission, or the required safe action.
 
-Guardian Agent reasons over robot telemetry and returns structured operational decisions while safety-critical constraints remain deterministic. Live Bedrock inference is still pending verification; the offline demo never claims model inference.
+Guardian Agent reasons over robot telemetry and returns structured operational decisions while safety-critical constraints remain deterministic. Switching providers does not change the policy/tool/output flow and is never automatic. Live Strands inference is verified locally with Ollama and `llama3.1`; live Amazon Bedrock inference remains pending AWS account/payment activation. The policy-only demo still explicitly states that it performs no model inference.
 
 ## Demo Scenarios
 
@@ -131,6 +133,26 @@ python demo.py --policy-only
 
 `--policy-only` is a transparent offline/debug path: it prints `TELEMETRY SOURCE: SIMULATED` and `NO MODEL INFERENCE`. Judges do not need a physical quadruped or AWS credentials to run it. See [testing instructions](docs/TESTING.md) for platform-specific setup, tests, and the credential-dependent Strands path.
 
+## Run a Real Strands Provider
+
+Amazon Bedrock is preferred and remains the default. It requires valid AWS credentials, region/model access, and completed account activation:
+
+```text
+python demo.py
+```
+
+Ollama is an explicit local fallback so judges and developers can run the real Strands Agent without AWS credentials. After installing Ollama and pulling a tool-capable model, use Windows PowerShell:
+
+```text
+$env:GUARDIAN_MODEL_PROVIDER="ollama"
+$env:OLLAMA_MODEL="llama3.1"
+python demo.py
+```
+
+There is no silent fallback between providers. See the [Guardian Agent guide](guardian-agent/README.md) for installation and macOS/Linux commands. This exact local provider path completed all four simulated-telemetry scenarios using a real Strands Agent, custom tool invocation, Pydantic structured output, and deterministic post-enforcement.
+
+Ollama emitted a non-fatal warning that forced `ToolChoice` is unsupported. GuardianPaw explicitly invokes `evaluate_safety_policy` through the registered Strands tool before model reasoning, so the current safety-tool path still completed successfully.
+
 ## Repository Guide
 
 | Path | Purpose |
@@ -152,6 +174,7 @@ python demo.py --policy-only
 - Physical autonomous avoidance remains a supervised Phase 1-C milestone.
 - Battery telemetry, MPU6050, vision, AgentCore deployment, database, Web UI, and multi-agent operation are not included.
 - Live Bedrock inference will be tested only after AWS account/payment activation and model access are available.
+- The verified local fallback requires a running Ollama service and a pulled `llama3.1` model. Ollama's forced-`ToolChoice` warning remains disclosed even though GuardianPaw's explicit safety-tool path succeeds.
 
 ## License and Attribution
 
