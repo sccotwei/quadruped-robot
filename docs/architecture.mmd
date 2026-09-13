@@ -1,0 +1,32 @@
+flowchart TD
+    subgraph EDGE[Physical / Edge Layer]
+        ENV[Home environment]
+        TOF["VL53L1X interface<br/>CURRENTLY SIMULATED ToF INPUT"]
+        ESP[ESP32 local controller]
+        GAIT[Gait / servo control]
+        AVOID[Local obstacle avoidance]
+        FAIL[Fail-safe controller]
+
+        ENV --> TOF --> ESP
+        ESP --> GAIT
+        ESP --> AVOID
+        ESP --> FAIL
+    end
+
+    ESP -->|Telemetry snapshot| STATE[RobotState]
+
+    subgraph GUARDIAN[Guardian Decision Layer]
+        STATE --> POLICY[Deterministic Safety Policy]
+        POLICY --> AGENT[Strands Agent]
+        AGENT -->|"Invoke custom @tool"| TOOL[evaluate_safety_policy]
+        TOOL -->|Authoritative safety assessment| AGENT
+        AGENT --> DECISION[Structured high-level recommendation]
+        DECISION --> HUMAN{Human intervention required?}
+        HUMAN -->|Yes| ESCALATE[Human escalation]
+        HUMAN -->|No| GUIDANCE[Continue / wait / pause guidance]
+    end
+
+    subgraph MODEL[Model Provider Path]
+        AGENT -.->|Implemented; live inference pending| BEDROCK[Amazon Bedrock]
+        BEDROCK -.-> CLAUDE[Claude model]
+    end
